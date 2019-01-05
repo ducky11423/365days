@@ -10,6 +10,11 @@ operator_precedence = {
     "-": 1
 }
 
+def get_operator_precedence(operator):
+    if operator in operator_precedence:
+        return operator_precedence[operator]
+    return None
+
 left_assoc = ["/", "-"]
 
 class RPN:
@@ -155,27 +160,58 @@ else:
         was_symbol = False # Was the last thing that was checked a symbol? 
 
         while expression is not "":
-            match = re.match("(?<![0-9.A-z\)])-?[0-9]*\.?[0-9]*", expression) # Check for numbers
-            if(match):
-                if(was_symbol or match[0] is "-"):
+            match = re.search("\A(?<![0-9.A-z\)])-?[0-9]*\.?[0-9]*", expression) # Check for numbers
+            if match and len(match[0]) > 0:
+                if(was_symbol and "-" in match[0] or match[0] is "-"):
                     # It's actually a minus operation, not a negative sign
                     operator_stack.append("-")
                     expression = expression[1:]
+                    was_symbol = False
                 else:
-                    # It's a number, put it on the output
-                    expression = re.sub("(?<![0-9.A-z\)])-?[0-9]*\.?[0-9]*", "", expression)
+                    # It's a number or variable, put it on the output
+                    output.append(match[0])
+                    expression = re.sub("\A(?<![0-9.A-z\)])-?[0-9]*\.?[0-9]*|\A(?<![A-z])[A-z](?![A-z])", "", expression)
+                    was_symbol = True
             else:
-                match = re.match("[+*\/\(\)]|[A-z]+", expression)
+                match = re.match("\A[+*\/\(\)]|\A[A-z]+", expression)
                 if(match):
                     # Operation or function
                     operation = match[0]
-                    precedence = operator_precedence[operation]
+                    precedence = get_operator_precedence(operation)
 
-                    if precedence is not None:
-                        stack_precedence = operator_precedence[stack[len(stack)]]
-                        if precedence > stack_precedence:
-                            operator_stack.append(operation)
-                        elif operation in left_assoc and precedence is stack_precedence:
-                            pass
-                    
-                    expression = re.sub("[+*\/\(\)]|[A-z]+", "", expression)
+                    if precedence is not None and len(operator_stack) is not 0:
+                        stack_precedence = get_operator_precedence(operator_stack[len(operator_stack)-1])
+                        if stack_precedence is not None:
+                            while precedence < stack_precedence or precedence == stack_precedence and operation not in left_assoc:
+                                output.append(operator_stack.pop())
+                                if len(operator_stack) is 0:
+                                    break
+
+                                stack_precedence = get_operator_precedence(operator_stack[len(operator_stack)-1])
+                                if stack_precedence is None:
+                                    break
+
+                        operator_stack.append(operation)
+                        was_symbol = False
+                    elif operation == "(":
+                        operator_stack.append(operation)
+                        was_symbol = False
+                    elif operation == ")":
+                        pop = operator_stack.pop()
+                        while pop is not "(":
+                            output.append(pop)
+                            pop = operator_stack.pop()
+                        was_symbol = True
+                    else:
+                        # operation goes right on the stack
+                        operator_stack.append(operation)
+                        was_symbol = False
+
+                    expression = re.sub("\A[+*\/\(\)]|\A[A-z]+", "", expression)
+
+        while operator_stack:
+            output.append(operator_stack.pop())
+        output_string = " ".join(output)
+        print(output_string)
+        result = rpn.solve(output_string)
+        print(" = " + " ".join([str(i) for i in result]))
